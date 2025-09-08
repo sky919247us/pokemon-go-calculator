@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POKEMON GO 50級試算器</title>
+    <title>POKEMON GO 50級試算器 V3.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -98,9 +98,9 @@
 
     </div>
 
-    <!-- 計數器顯示區 (右下角) -->
-    <div class="fixed bottom-4 right-4 bg-gray-900 text-white text-sm py-2 px-4 rounded-full shadow-lg z-50">
-        總計算次數：<span id="calc-counter">載入中...</span>
+    <!-- 版本資訊 -->
+    <div class="fixed bottom-4 right-4 text-gray-400 text-xs z-50">
+        <span id="today-date"></span> | V3.0
     </div>
 
     <script>
@@ -112,44 +112,22 @@
             const tasksContainer = document.getElementById('tasks-container');
             const resultsContainer = document.getElementById('results-container');
             const currentXpInput = document.getElementById('current-xp');
-            const counterSpan = document.getElementById('calc-counter');
+            const todayDateSpan = document.getElementById('today-date');
 
-            // --- 計數器功能 ---
-            const countApiKey = 'pokemon-go-50-calculator-app-shared';
+            // --- 設定今天日期 ---
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            todayDateSpan.textContent = `${year}/${month}/${day}`;
 
-            async function updateAndDisplayCounter(shouldIncrement = false) {
-                const namespace = 'default';
-                const corsProxy = 'https://api.allorigins.win/raw?url=';
-                let count = '錯誤';
-
-                try {
-                    // 根據是否需要增加計數來決定使用的 API 端點
-                    const endpoint = shouldIncrement ? 'hit' : 'get';
-                    const apiUrl = `https://api.countapi.xyz/${endpoint}/${namespace}/${countApiKey}`;
-                    
-                    // 透過 CORS 代理發送請求
-                    const response = await fetch(`${corsProxy}${encodeURIComponent(apiUrl)}`);
-                    const rawData = await response.json();
-
-                    // allorigins 將實際回應包在 'contents' 屬性中，需要解析
-                    if (rawData && rawData.contents) {
-                        const data = JSON.parse(rawData.contents);
-                        if (data.value !== undefined) {
-                            count = data.value.toLocaleString();
-                        }
-                    } else if (rawData.value !== undefined) {
-                        // 備用方案，以防代理直接返回原始數據
-                        count = rawData.value.toLocaleString();
-                    }
-                } catch (error) {
-                    console.error("計數器錯誤:", error);
-                    count = 'N/A'; // 若發生錯誤，顯示 N/A
-                }
-                counterSpan.textContent = count;
-            }
-
-            // 任務資料
+            // 任務及經驗值資料
             const tasksData = {
+                baseXp: {
+                    48: 156000000,
+                    49: 181000000,
+                    50: 211000000
+                },
                 level49: {
                     title: '49級升級條件',
                     xp_required: 25000000,
@@ -198,21 +176,16 @@
                 }
             }
 
-            // 創建任務卡片的輔助函數
             function createTaskCards(levelData) {
                 const levelWrapper = document.createElement('div');
                 levelWrapper.className = 'mt-6 level-wrapper';
-                
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'flex justify-between items-center mb-4';
-
                 const title = document.createElement('h2');
                 title.className = 'text-2xl font-bold text-indigo-700';
                 title.textContent = levelData.title;
                 headerDiv.appendChild(title);
-
                 levelWrapper.appendChild(headerDiv);
-
                 levelData.tasks.forEach(task => {
                     const card = document.createElement('div');
                     card.className = 'card';
@@ -230,11 +203,9 @@
                     `;
                     levelWrapper.appendChild(card);
                 });
-
                 tasksContainer.appendChild(levelWrapper);
             }
             
-            // 事件監聽：點擊 "已完成" 按鈕
             tasksContainer.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON' && e.target.dataset.inputId) {
                     const inputId = e.target.dataset.inputId;
@@ -261,31 +232,48 @@
 
                 const diffTime = Math.abs(endDate - today);
                 const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
                 let resultsHTML = '';
 
                 // --- 統一計算總經驗值 ---
                 let totalRequiredXpFromStartLevel = 0;
-                
                 if (selectedLevel === 48) {
-                    // 從48級開始，目標是升49和升50的經驗總和
-                    totalRequiredXpFromStartLevel = tasksData.level49.xp_required + tasksData.level50.xp_required; // 55,000,000
+                    totalRequiredXpFromStartLevel = tasksData.level49.xp_required + tasksData.level50.xp_required;
                 } else if (selectedLevel === 49) {
-                    // 從49級開始，目標是升50的經驗
-                    totalRequiredXpFromStartLevel = tasksData.level50.xp_required; // 30,000,000
+                    totalRequiredXpFromStartLevel = tasksData.level50.xp_required;
                 }
 
-                // currentXp現在代表的是升到目前等級後，又額外獲得的經驗值
                 const remainingXp = Math.max(0, totalRequiredXpFromStartLevel - currentXp);
+                const baseXp = tasksData.baseXp[selectedLevel] || 0;
+                const actualCurrentTotalXp = baseXp + currentXp;
+                const finalTargetXp = tasksData.baseXp[50];
                 
                 if (remainingXp > 0) {
                     const dailyXp = Math.ceil(remainingXp / totalDays);
-                    resultsHTML += `
+                    let xpCardHTML = `
                         <div class="card bg-yellow-50 border-yellow-200">
                             <h3 class="text-xl font-bold mb-2 text-yellow-800">總經驗值目標 (剩餘 ${totalDays} 天)</h3>
-                            <p><strong>每日需獲得 <span class="text-yellow-900 font-bold">${dailyXp.toLocaleString()}</span> XP</strong></p>
-                        </div>
-                    `;
+                            <p><strong>每日需獲得 <span class="text-yellow-900 font-bold">${dailyXp.toLocaleString()}</span> XP</strong></p>`;
+                    
+                    let forecastHTML = `<div class="mt-3 pt-2 border-t border-yellow-100"><h4 class="text-sm font-semibold text-gray-700 mb-1">未來五日目標參考 (總經驗值)：</h4><ul class="list-disc list-inside text-sm text-gray-600 space-y-1">`;
+                    for (let i = 1; i <= 5; i++) {
+                        const targetDate = new Date();
+                        targetDate.setDate(today.getDate() + i);
+                        const monthStr = String(targetDate.getMonth() + 1).padStart(2, '0');
+                        const dayStr = String(targetDate.getDate()).padStart(2, '0');
+                        const cumulativeTargetXp = actualCurrentTotalXp + (dailyXp * i);
+
+                        if (cumulativeTargetXp >= finalTargetXp) {
+                            forecastHTML += `<li>${monthStr}/${dayStr}: <span class="font-bold text-green-600">達成50級目標 (${finalTargetXp.toLocaleString()} XP)</span></li>`;
+                            break;
+                        } else {
+                            forecastHTML += `<li>${monthStr}/${dayStr}: 累計需達 <span class="font-bold">${Math.ceil(cumulativeTargetXp).toLocaleString()}</span> XP</li>`;
+                        }
+                    }
+                    forecastHTML += '</ul></div>';
+                    xpCardHTML += forecastHTML;
+                    xpCardHTML += `</div>`;
+                    resultsHTML += xpCardHTML;
+
                 } else {
                      resultsHTML += `
                         <div class="card bg-green-50 border-green-200">
@@ -294,84 +282,81 @@
                         </div>
                     `;
                 }
-
                 
-                // --- 等級49計算 ---
-                if (selectedLevel <= 48) {
-                    const daysFor49 = (selectedLevel === 48) ? Math.floor(totalDays / 2) : totalDays;
+                // --- 任務計算 ---
+                const processLevelTasks = (levelTasks, daysForTask, theme, showForecast) => {
+                    let levelResultsHTML = `<div class="card bg-${theme}-50 mt-4"><h3 class="text-xl font-bold mb-4 text-${theme}-800">${levelTasks.title}每日進度 (剩餘 ${daysForTask} 天)</h3><div class="space-y-4">`;
+                    levelTasks.tasks.forEach(task => {
+                        const input = document.getElementById(task.id);
+                        const currentValue = parseInt(input.value, 10) || 0;
+                        const remaining = Math.max(0, task.target - currentValue);
+                        let taskHTML = `<div><p><strong>${task.label}:</strong> `;
 
-                    let level49Results = `
-                        <div class="card bg-indigo-50 mt-4">
-                            <h3 class="text-xl font-bold mb-4 text-indigo-800">49級任務每日進度 (剩餘 ${daysFor49} 天)</h3>
-                            <div class="space-y-4">`;
-                    
+                        if (remaining > 0 && daysForTask > 0) {
+                            const dailyAverage = remaining / daysForTask;
+                            taskHTML += `每日需完成 <span class="text-${theme}-600 font-bold">${dailyAverage.toFixed(2)}</span> 次/個</p>
+                                       <p class="mt-1 pl-4 border-l-2 border-${theme}-200 text-sm text-gray-600 italic">攻略: ${tips[task.id]}</p>`;
+                            
+                            if (showForecast) {
+                                let forecastHTML = `<div class="mt-3 pt-2 border-t border-${theme}-100"><h4 class="text-sm font-semibold text-gray-700 mb-1">未來五日目標參考：</h4><ul class="list-disc list-inside text-sm text-gray-600 space-y-1">`;
+                                for (let i = 1; i <= 5; i++) {
+                                    const targetDate = new Date();
+                                    targetDate.setDate(today.getDate() + i);
+                                    const monthStr = String(targetDate.getMonth() + 1).padStart(2, '0');
+                                    const dayStr = String(targetDate.getDate()).padStart(2, '0');
+                                    const cumulativeTarget = Math.ceil(currentValue + (dailyAverage * i));
+
+                                    if (cumulativeTarget >= task.target) {
+                                         forecastHTML += `<li>${monthStr}/${dayStr}: <span class="font-bold text-green-600">達成目標 (${task.target.toLocaleString()})</span></li>`;
+                                         break; 
+                                    } else {
+                                         forecastHTML += `<li>${monthStr}/${dayStr}: 累計需達 <span class="font-bold">${cumulativeTarget.toLocaleString()}</span></li>`;
+                                    }
+                                }
+                                forecastHTML += '</ul></div>';
+                                taskHTML += forecastHTML;
+                            }
+                        } else {
+                            taskHTML += `<span class="text-green-600 font-bold">已完成</span></p>`;
+                        }
+                        taskHTML += `</div>`;
+                        levelResultsHTML += taskHTML;
+                    });
+                    levelResultsHTML += `</div></div>`;
+                    return levelResultsHTML;
+                }
+                
+                let showLevel50Forecast = true;
+                if (selectedLevel === 48) {
+                    let allLevel49TasksDone = true;
                     tasksData.level49.tasks.forEach(task => {
                         const input = document.getElementById(task.id);
                         const currentValue = parseInt(input.value, 10) || 0;
-                        const remaining = Math.max(0, task.target - currentValue);
-                        
-                        let taskHTML = `<div><p><strong>${task.label}:</strong> `;
-
-                        if (remaining > 0 && daysFor49 > 0) {
-                            taskHTML += `每日需完成 <span class="text-indigo-600 font-bold">${(remaining / daysFor49).toFixed(2)}</span> 次/個</p>
-                                       <p class="mt-1 pl-4 border-l-2 border-indigo-200 text-sm text-gray-600 italic">攻略: ${tips[task.id]}</p>`;
-                        } else {
-                            taskHTML += `<span class="text-green-600 font-bold">已完成</span></p>`;
+                        if (currentValue < task.target) {
+                            allLevel49TasksDone = false;
                         }
-                        taskHTML += `</div>`;
-                        level49Results += taskHTML;
                     });
-                    level49Results += `</div></div>`;
-                    resultsHTML += level49Results;
+                    if (!allLevel49TasksDone) {
+                        showLevel50Forecast = false;
+                    }
                 }
 
-                // --- 等級50計算 ---
+                if (selectedLevel <= 48) {
+                    const daysFor49 = Math.floor(totalDays / 2);
+                    resultsHTML += processLevelTasks(tasksData.level49, daysFor49, 'indigo', true);
+                }
                 if (selectedLevel <= 49) {
                     const daysFor50 = (selectedLevel === 48) ? Math.ceil(totalDays / 2) : totalDays;
-                    
-                    let level50Results = `
-                        <div class="card bg-purple-50 mt-4">
-                           <h3 class="text-xl font-bold mb-4 text-purple-800">50級任務每日進度 (剩餘 ${daysFor50} 天)</h3>
-                           <div class="space-y-4">`;
-
-                    tasksData.level50.tasks.forEach(task => {
-                        const input = document.getElementById(task.id);
-                        const currentValue = parseInt(input.value, 10) || 0;
-                        const remaining = Math.max(0, task.target - currentValue);
-                        
-                        let taskHTML = `<div><p><strong>${task.label}:</strong> `;
-
-                        if (remaining > 0 && daysFor50 > 0) {
-                             taskHTML += `每日需完成 <span class="text-purple-600 font-bold">${(remaining / daysFor50).toFixed(2)}</span> 次/個</p>
-                                        <p class="mt-1 pl-4 border-l-2 border-purple-200 text-sm text-gray-600 italic">攻略: ${tips[task.id]}</p>`;
-                        } else {
-                            taskHTML += `<span class="text-green-600 font-bold">已完成</span></p>`;
-                        }
-                        taskHTML += `</div>`;
-                        level50Results += taskHTML;
-                    });
-                    level50Results += `</div></div>`;
-                    resultsHTML += level50Results;
+                    resultsHTML += processLevelTasks(tasksData.level50, daysFor50, 'purple', showLevel50Forecast);
                 }
 
                 resultsContainer.innerHTML = resultsHTML;
             }
 
-            // 事件綁定
             levelSelect.addEventListener('change', renderTasks);
-            
-            calculateBtn.addEventListener('click', () => {
-                calculateProgress(); // 執行原本的計算
-                updateAndDisplayCounter(true); // 執行計數+1並更新顯示
-            });
-
-            refreshBtn.addEventListener('click', () => {
-                location.reload();
-            });
-
-            // 初始渲染
+            calculateBtn.addEventListener('click', calculateProgress);
+            refreshBtn.addEventListener('click', () => location.reload());
             renderTasks();
-            updateAndDisplayCounter(false); // 頁面載入時，只讀取計數，不增加
         });
     </script>
 </body>
